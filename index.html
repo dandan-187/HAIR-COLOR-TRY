@@ -25,11 +25,9 @@
   <canvas id="preview"></canvas>
   <div id="countdown">3</div>
 </div>
-
 <p id="status">Load and allow camera access</p>
 <button id="start-btn">Start Camera</button>
 <button id="retry-btn" style="display:none;">Try Again</button>
-
 <div id="results" style="display:none;">
   <h3>Your Face with Different Hair Colors</h3>
   <div class="grid" id="color-grid"></div>
@@ -49,7 +47,6 @@ const results = document.getElementById('results');
 const grid = document.getElementById('color-grid');
 const mixBtn = document.getElementById('mix-btn');
 const log = document.getElementById('log');
-
 let faceLandmarks = null;
 let capturedDataURL = null;
 let stream = null;
@@ -69,9 +66,9 @@ const hairColors = [
   { name:"Violet Purple", hex:"#9c27b0" }
 ];
 
-// --- setup FaceMesh ---
+// FaceMesh setup
 const faceMesh = new FaceMesh({
-  locateFile: (file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
 faceMesh.setOptions({
   maxNumFaces: 1,
@@ -80,113 +77,106 @@ faceMesh.setOptions({
   minTrackingConfidence: 0.6
 });
 faceMesh.onResults(r => {
-  if(r.multiFaceLandmarks && r.multiFaceLandmarks[0]){
-    faceLandmarks = r.multiFaceLandmarks[0];
-  } else {
-    faceLandmarks = null;
-  }
+  faceLandmarks = r.multiFaceLandmarks?.[0] || null;
 });
 
-// --- step 1: start camera ---
-async function startCamera(){
-  results.style.display='none';
-  retryBtn.style.display='none';
-  statusEl.textContent='Accessing camera...';
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" } });
+// Start camera
+async function startCamera() {
+  results.style.display = 'none';
+  retryBtn.style.display = 'none';
+  statusEl.textContent = 'Accessing camera...';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     video.srcObject = stream;
-    video.style.display='block';
-    statusEl.textContent='Camera activated';
-    
-    camera = new Camera(video,{
-      onFrame: async()=>{ await faceMesh.send({image:video}); },
-      width:480,
-      height:480
+    video.style.display = 'block';
+    statusEl.textContent = 'Camera activated';
+
+    camera = new Camera(video, {
+      onFrame: async () => { await faceMesh.send({image: video}); },
+      width: 480,
+      height: 480
     });
     camera.start();
 
-    // after ready, start 3-sec countdown
-    setTimeout(()=>countdownCapture(),1000);
-  }catch(err){
-    statusEl.textContent='Camera error: '+err.message;
-    retryBtn.style.display='block';
+    setTimeout(countdownCapture, 1000);
+  } catch (err) {
+    statusEl.textContent = 'Camera error: ' + err.message;
+    retryBtn.style.display = 'block';
   }
 }
 
-// --- step 2: countdown then capture ---
-function countdownCapture(){
-  let count=3;
-  countdownEl.textContent=count;
-  countdownEl.style.display='block';
-  const timer=setInterval(()=>{
+// Countdown then capture
+function countdownCapture() {
+  let count = 3;
+  countdownEl.textContent = count;
+  countdownEl.style.display = 'block';
+  const timer = setInterval(() => {
     count--;
-    countdownEl.textContent=count;
-    if(count<=0){
+    countdownEl.textContent = count;
+    if (count <= 0) {
       clearInterval(timer);
-      countdownEl.style.display='none';
+      countdownEl.style.display = 'none';
       capturePhoto();
     }
-  },1000);
+  }, 1000);
 }
 
-// --- step 3: capture photo ---
-function capturePhoto(){
-  if(!faceLandmarks){
-    statusEl.textContent='❌ No face detected! Please reposition & try again.';
-    retryBtn.style.display='block';
+// Capture photo
+function capturePhoto() {
+  if (!faceLandmarks) {
+    statusEl.textContent = '❌ No face detected! Please reposition & try again.';
+    retryBtn.style.display = 'block';
     return;
   }
-
   previewCanvas.width = video.videoWidth;
-  previewCanvas.height= video.videoHeight;
-  ctx.drawImage(video,0,0,previewCanvas.width,previewCanvas.height);
+  previewCanvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, previewCanvas.width, previewCanvas.height);
   capturedDataURL = previewCanvas.toDataURL('image/png');
 
-  // stop camera
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  video.style.display='none';
-  previewCanvas.style.display='block';
-
-  statusEl.textContent='✅ Face captured successfully!';
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  video.style.display = 'none';
+  previewCanvas.style.display = 'block';
+  statusEl.textContent = '✅ Face captured successfully!';
   showColorOptions();
 }
 
-// --- step 4: create tinted preview canvases ---
-function tintHair(colorHex){
-  return new Promise(resolve=>{
-    const img=new Image();
-    img.src=capturedDataURL;
-    img.onload=()=>{
-      const canvas=document.createElement('canvas');
-      canvas.width=img.width;
-      canvas.height=img.height;
-      const c=canvas.getContext('2d');
-      c.drawImage(img,0,0);
+// Improved tintHair – better area + natural blend
+function tintHair(colorHex) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.src = capturedDataURL;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const c = canvas.getContext('2d');
+      c.drawImage(img, 0, 0);
 
-      if(faceLandmarks){
-        // approximate top area of head
-        const indices=[10,338,297,332,284,251,389,356,454,323,447,265,340,372,345];
-        const pts=indices.map(i=>({
-          x:faceLandmarks[i].x*canvas.width,
-          y:faceLandmarks[i].y*canvas.height
+      if (faceLandmarks) {
+        // Wider hair/scalp area using Face Mesh landmarks
+        const indices = [
+          10, 151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 2, 164, 0, 11,  // center top
+          447, 332, 297, 338, 10, 109, 10, 338, 265, 372, 345, 340, 265  // sides + back
+        ];
+        const pts = indices.map(i => ({
+          x: faceLandmarks[i].x * canvas.width,
+          y: faceLandmarks[i].y * canvas.height
         }));
 
         c.save();
         c.beginPath();
-        c.moveTo(pts[0].x,pts[0].y);
-        pts.forEach(p=>c.lineTo(p.x,p.y));
+        c.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          c.lineTo(pts[i].x, pts[i].y);
+        }
         c.closePath();
         c.clip();
 
-        c.globalCompositeOperation='color';
-        c.globalAlpha=0.7;
-        c.fillStyle=colorHex;
-        c.fillRect(0,0,canvas.width,canvas.height);
-
-        c.globalCompositeOperation='screen';
-        c.globalAlpha=0.15;
-        c.fillStyle='#fff';
-        c.fillRect(0,0,canvas.width,canvas.height);
+        // Natural hair tint
+        c.globalCompositeOperation = 'multiply';
+        c.globalAlpha = 0.45;
+        c.fillStyle = colorHex;
+        c.fillRect(0, 0, canvas.width, canvas.height);
         c.restore();
       }
       resolve(canvas);
@@ -194,38 +184,40 @@ function tintHair(colorHex){
   });
 }
 
-// --- step 5: display color previews ---
-async function showColorOptions(){
-  results.style.display='block';
-  grid.innerHTML='';
-  for(const color of hairColors){
-    const card=document.createElement('div');
-    card.className='card';
-    const tintCanvas=await tintHair(color.hex);
-    const displayCanvas=document.createElement('canvas');
-    displayCanvas.width=150; displayCanvas.height=150*tintCanvas.height/tintCanvas.width;
-    displayCanvas.getContext('2d').drawImage(tintCanvas,0,0,displayCanvas.width,displayCanvas.height);
+// Show color previews
+async function showColorOptions() {
+  results.style.display = 'block';
+  grid.innerHTML = '';
+  for (const color of hairColors) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const tintCanvas = await tintHair(color.hex);
+    const displayCanvas = document.createElement('canvas');
+    displayCanvas.width = 150;
+    displayCanvas.height = 150 * tintCanvas.height / tintCanvas.width;
+    displayCanvas.getContext('2d').drawImage(tintCanvas, 0, 0, displayCanvas.width, displayCanvas.height);
     card.appendChild(displayCanvas);
-    const label=document.createElement('div');
-    label.innerHTML=`<div style="width:15px;height:15px;border-radius:50%;display:inline-block;background:${color.hex};margin-right:6px;"></div>${color.name}`;
+
+    const label = document.createElement('div');
+    label.innerHTML = `<div style="width:15px;height:15px;border-radius:50%;display:inline-block;background:${color.hex};margin-right:6px;"></div>${color.name}`;
     card.appendChild(label);
-    card.onclick=()=>{
-      if(selectedCard) selectedCard.classList.remove('selected');
+
+    card.onclick = () => {
+      if (selectedCard) selectedCard.classList.remove('selected');
       card.classList.add('selected');
-      selectedCard=card;
-      log.innerHTML=`Selected color: <b>${color.name}</b> (${color.hex})`;
-      mixBtn.style.display='block';
+      selectedCard = card;
+      log.innerHTML = `Selected color: <b>${color.name}</b> (${color.hex})`;
+      mixBtn.style.display = 'block';
     };
     grid.appendChild(card);
   }
 }
 
-// --- step 6: button logic ---
-startBtn.onclick=startCamera;
-retryBtn.onclick=startCamera;
-
-mixBtn.onclick=()=>{
-  log.innerHTML+=' <br>🎨 Mixing 50ml color ready for application!';
+// Buttons
+startBtn.onclick = startCamera;
+retryBtn.onclick = startCamera;
+mixBtn.onclick = () => {
+  log.innerHTML += ' <br>🎨 Mixing 50ml color ready for application!';
 };
 </script>
 </body>
