@@ -2,263 +2,231 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Hair Color Mixer - Perfected Hair-Only</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <title>Hair Color Mixer</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 10px; color: #333; touch-action: manipulation; }
-    h1 { text-align: center; color: #d81b60; font-size: 1.6rem; margin: 15px 0; }
-    .container { max-width: 100%; margin: 0 auto; }
-    .section { background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
-    #video, #preview { width: 100%; height: 300px; object-fit: cover; border-radius: 12px; display: none; }
-    #countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 6rem; color: white; font-weight: bold; text-shadow: 0 0 15px black; display: none; z-index: 10; }
-    #status { text-align: center; font-weight: bold; margin: 12px 0; font-size: 1.1rem; color: #444; }
-    #start-btn, #retry-btn, #mix-btn { width: 100%; padding: 16px; font-size: 1.3rem; background: #ff5252; color: white; border: none; border-radius: 50px; cursor: pointer; margin: 15px 0; box-shadow: 0 4px 12px rgba(255,82,82,0.4); }
-    #start-btn:hover, #retry-btn:hover, #mix-btn:hover { background: #ff1744; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 15px 0; }
-    .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.15); cursor: pointer; transition: all 0.2s; text-align: center; padding: 8px; }
-    .card:hover, .card.selected { transform: scale(1.08); box-shadow: 0 6px 18px rgba(216,27,96,0.5); border: 3px solid #d81b60; }
-    .card canvas { width: 100%; height: 180px; object-fit: cover; border-radius: 8px; }
-    .card .label { display: flex; align-items: center; justify-content: center; margin-top: 8px; font-size: 1rem; font-weight: bold; }
-    .card .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #ddd; margin-right: 8px; }
-    #log { padding: 14px; background: #e3f2fd; border-radius: 12px; font-size: 1rem; min-height: 70px; line-height: 1.5; }
-    #camera-container { position: relative; }
+    body { font-family: Arial; text-align:center; background:#fafafa; color:#333; padding:10px; }
+    video,canvas { width:100%; border-radius:15px; display:none; }
+    #countdown { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:6rem; color:white; text-shadow:0 0 10px black; display:none; }
+    button { width:100%; padding:15px; border:none; border-radius:50px; font-size:1.2rem; background:#ff4569; color:white; box-shadow:0 3px 10px rgba(0,0,0,0.2); margin-top:12px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px; margin-top:15px; }
+    .card { background:white; border-radius:12px; padding:8px; box-shadow:0 3px 10px rgba(0,0,0,0.15); cursor:pointer; }
+    .card:hover, .selected { transform:scale(1.05); border:3px solid #ff4569; }
   </style>
 </head>
 <body>
+<h1>Hair Color Mixer</h1>
+<div style="position:relative;">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="preview"></canvas>
+  <div id="countdown">3</div>
+</div>
 
-  <h1>Hair Color Mixer</h1>
+<p id="status">Load and allow camera access</p>
+<button id="start-btn">Start Camera</button>
+<button id="retry-btn" style="display:none;">Try Again</button>
 
-  <div class="container">
-    <div class="section">
-      <div id="camera-container">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="preview" style="display:none;"></canvas>
-        <div id="countdown">3</div>
-      </div>
-      <div id="status">Click "Start Camera" (models load first time ~5-15s)</div>
-      <button id="start-btn">Start Camera</button>
-      <button id="retry-btn" style="display:none;">Try Again</button>
-    </div>
+<div id="results" style="display:none;">
+  <h3>Your Face with Different Hair Colors</h3>
+  <div class="grid" id="color-grid"></div>
+  <button id="mix-btn" style="display:none;">Mix Selected Color</button>
+  <p id="log"></p>
+</div>
 
-    <div class="section" id="results" style="display:none;">
-      <h3 style="text-align:center; margin:0 0 15px;">Your Face with Hair Colors</h3>
-      <div class="grid" id="color-grid"></div>
-      <button id="mix-btn" style="display:none;">Mix Selected Color Now</button>
-      <div id="log">Tap any preview to select → then mix!</div>
-    </div>
-  </div>
+<script>
+const video = document.getElementById('video');
+const previewCanvas = document.getElementById('preview');
+const ctx = previewCanvas.getContext('2d');
+const countdownEl = document.getElementById('countdown');
+const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('start-btn');
+const retryBtn = document.getElementById('retry-btn');
+const results = document.getElementById('results');
+const grid = document.getElementById('color-grid');
+const mixBtn = document.getElementById('mix-btn');
+const log = document.getElementById('log');
 
-  <script>
-    const video = document.getElementById('video');
-    const previewCanvas = document.getElementById('preview');
-    const previewCtx = previewCanvas.getContext('2d');
-    const status = document.getElementById('status');
-    const countdownEl = document.getElementById('countdown');
-    const startBtn = document.getElementById('start-btn');
-    const retryBtn = document.getElementById('retry-btn');
-    const results = document.getElementById('results');
-    const grid = document.getElementById('color-grid');
-    const mixBtn = document.getElementById('mix-btn');
-    const log = document.getElementById('log');
+let faceLandmarks = null;
+let capturedDataURL = null;
+let stream = null;
+let camera = null;
+let selectedCard = null;
 
-    let stream = null;
-    let capturedDataURL = null;
-    let selectedCard = null;
-    let faceLandmarks = null;
+const hairColors = [
+  { name:"Golden Blonde", hex:"#f5e050" },
+  { name:"Ash Blonde", hex:"#e0d8c3" },
+  { name:"Light Brown", hex:"#c68642" },
+  { name:"Chocolate Brown", hex:"#5d4037" },
+  { name:"Jet Black", hex:"#1c1c1c" },
+  { name:"Auburn Red", hex:"#a52a2a" },
+  { name:"Rose Pink", hex:"#f48fb1" },
+  { name:"Pastel Blue", hex:"#81d4fa" },
+  { name:"Platinum Silver", hex:"#d0d0d0" },
+  { name:"Violet Purple", hex:"#9c27b0" }
+];
 
-    const hairColors = [
-      { name: "Golden Blonde", hex: "#f5e050" },
-      { name: "Ash Blonde", hex: "#e0d8c3" },
-      { name: "Light Brown", hex: "#c68642" },
-      { name: "Chocolate Brown", hex: "#5d4037" },
-      { name: "Jet Black", hex: "#1c1c1c" },
-      { name: "Auburn Red", hex: "#a52a2a" },
-      { name: "Rose Pink", hex: "#f48fb1" },
-      { name: "Pastel Blue", hex: "#81d4fa" },
-      { name: "Platinum Silver", hex: "#d0d0d0" },
-      { name: "Violet Purple", hex: "#9c27b0" }
-    ];
+// --- setup FaceMesh ---
+const faceMesh = new FaceMesh({
+  locateFile: (file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+faceMesh.onResults(r => {
+  if(r.multiFaceLandmarks && r.multiFaceLandmarks[0]){
+    faceLandmarks = r.multiFaceLandmarks[0];
+  } else {
+    faceLandmarks = null;
+  }
+});
 
-    // MediaPipe FaceMesh
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+// --- step 1: start camera ---
+async function startCamera(){
+  results.style.display='none';
+  retryBtn.style.display='none';
+  statusEl.textContent='Accessing camera...';
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" } });
+    video.srcObject = stream;
+    video.style.display='block';
+    statusEl.textContent='Camera activated';
+    
+    camera = new Camera(video,{
+      onFrame: async()=>{ await faceMesh.send({image:video}); },
+      width:480,
+      height:480
     });
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.6,
-      minTrackingConfidence: 0.6
-    });
-    faceMesh.onResults((results) => {
-      if (results.multiFaceLandmarks && results.multiFaceLandmarks[0]) {
-        faceLandmarks = results.multiFaceLandmarks[0];
+    camera.start();
+
+    // after ready, start 3-sec countdown
+    setTimeout(()=>countdownCapture(),1000);
+  }catch(err){
+    statusEl.textContent='Camera error: '+err.message;
+    retryBtn.style.display='block';
+  }
+}
+
+// --- step 2: countdown then capture ---
+function countdownCapture(){
+  let count=3;
+  countdownEl.textContent=count;
+  countdownEl.style.display='block';
+  const timer=setInterval(()=>{
+    count--;
+    countdownEl.textContent=count;
+    if(count<=0){
+      clearInterval(timer);
+      countdownEl.style.display='none';
+      capturePhoto();
+    }
+  },1000);
+}
+
+// --- step 3: capture photo ---
+function capturePhoto(){
+  if(!faceLandmarks){
+    statusEl.textContent='❌ No face detected! Please reposition & try again.';
+    retryBtn.style.display='block';
+    return;
+  }
+
+  previewCanvas.width = video.videoWidth;
+  previewCanvas.height= video.videoHeight;
+  ctx.drawImage(video,0,0,previewCanvas.width,previewCanvas.height);
+  capturedDataURL = previewCanvas.toDataURL('image/png');
+
+  // stop camera
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  video.style.display='none';
+  previewCanvas.style.display='block';
+
+  statusEl.textContent='✅ Face captured successfully!';
+  showColorOptions();
+}
+
+// --- step 4: create tinted preview canvases ---
+function tintHair(colorHex){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.src=capturedDataURL;
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      canvas.width=img.width;
+      canvas.height=img.height;
+      const c=canvas.getContext('2d');
+      c.drawImage(img,0,0);
+
+      if(faceLandmarks){
+        // approximate top area of head
+        const indices=[10,338,297,332,284,251,389,356,454,323,447,265,340,372,345];
+        const pts=indices.map(i=>({
+          x:faceLandmarks[i].x*canvas.width,
+          y:faceLandmarks[i].y*canvas.height
+        }));
+
+        c.save();
+        c.beginPath();
+        c.moveTo(pts[0].x,pts[0].y);
+        pts.forEach(p=>c.lineTo(p.x,p.y));
+        c.closePath();
+        c.clip();
+
+        c.globalCompositeOperation='color';
+        c.globalAlpha=0.7;
+        c.fillStyle=colorHex;
+        c.fillRect(0,0,canvas.width,canvas.height);
+
+        c.globalCompositeOperation='screen';
+        c.globalAlpha=0.15;
+        c.fillStyle='#fff';
+        c.fillRect(0,0,canvas.width,canvas.height);
+        c.restore();
       }
-    });
-
-    async function startCamera() {
-      status.textContent = 'Loading AI models... Wait a moment';
-      try {
-        await faceMesh.initialize();
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-        video.srcObject = stream;
-        video.style.display = 'block';
-        status.textContent = 'Camera ready! Capturing in 3...';
-        startBtn.style.display = 'none';
-        retryBtn.style.display = 'none';
-
-        const camera = new Camera(video, {
-          onFrame: async () => await faceMesh.send({image: video}),
-          width: 480,
-          height: 480
-        });
-        camera.start();
-
-        countdownCapture();
-      } catch (err) {
-        status.textContent = 'Camera error: ' + (err.name === 'NotAllowedError' ? 'Permission needed' : err.message);
-        retryBtn.style.display = 'block';
-      }
-    }
-
-    function countdownCapture() {
-      let count = 3;
-      countdownEl.textContent = count;
-      countdownEl.style.display = 'block';
-      const timer = setInterval(() => {
-        count--;
-        countdownEl.textContent = count;
-        if (count <= 0) {
-          clearInterval(timer);
-          countdownEl.style.display = 'none';
-          capturePhoto();
-        }
-      }, 1000);
-    }
-
-    function capturePhoto() {
-      previewCanvas.width = video.videoWidth;
-      previewCanvas.height = video.videoHeight;
-      previewCtx.drawImage(video, 0, 0);
-
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      video.style.display = 'none';
-      previewCanvas.style.display = 'block';
-
-      capturedDataURL = previewCanvas.toDataURL('image/png');
-
-      if (!faceLandmarks || faceLandmarks.length < 468) {
-        status.textContent = 'Face not detected well. Better lighting/position & try again!';
-        retryBtn.style.display = 'block';
-        return;
-      }
-
-      status.textContent = 'Perfect! Choose your new hair color';
-      showColorPreviews();
-    }
-
-    function createHairTintedCanvas(colorHex) {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = previewCanvas.width;
-      tempCanvas.height = previewCanvas.height;
-      const tempCtx = tempCanvas.getContext('2d');
-
-      const img = new Image();
-      img.src = capturedDataURL;
-
-      return new Promise((resolve) => {
-        img.onload = () => {
-          tempCtx.drawImage(img, 0, 0);
-
-          if (faceLandmarks) {
-            // Tighter hair polygon: top contour + sides/ears extension
-            const hairIndices = [10, 109, 67, 103, 54, 21, 162, 139, 70, 63, 105, 66, 229, 230, 231, 232, 233, 234, // top to left temple
-                                 454, 453, 452, 451, 450, 449, 448, 261, 446, 265, 372, 264, 251, 389, 356, // right side
-                                 454, 447, 264, 356, 389]; // close bottom
-
-            const points = hairIndices.map(i => ({
-              x: faceLandmarks[i].x * tempCanvas.width,
-              y: faceLandmarks[i].y * tempCanvas.height
-            }));
-
-            tempCtx.save();
-            tempCtx.beginPath();
-            tempCtx.moveTo(points[0].x, points[0].y);
-            points.forEach(p => tempCtx.lineTo(p.x, p.y));
-            tempCtx.closePath();
-            tempCtx.clip();
-
-            // Natural dye effect: 'color' mode + opacity for hue change without killing shine
-            tempCtx.globalCompositeOperation = 'color';
-            tempCtx.globalAlpha = 0.65;
-            tempCtx.fillStyle = colorHex;
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-            // Slight brightness boost for hair realism
-            tempCtx.globalCompositeOperation = 'screen';
-            tempCtx.globalAlpha = 0.15;
-            tempCtx.fillStyle = '#ffffff';
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-            tempCtx.restore();
-          }
-
-          resolve(tempCanvas);
-        };
-      });
-    }
-
-    async function showColorPreviews() {
-      results.style.display = 'block';
-      grid.innerHTML = '';
-
-      for (const c of hairColors) {
-        const card = document.createElement('div');
-        card.className = 'card';
-
-        const tintedCanvas = await createHairTintedCanvas(c.hex);
-
-        const cardCanvas = document.createElement('canvas');
-        cardCanvas.width = 400;
-        cardCanvas.height = 400 * (tintedCanvas.height / tintedCanvas.width);
-        cardCanvas.getContext('2d').drawImage(tintedCanvas, 0, 0, cardCanvas.width, cardCanvas.height);
-
-        card.innerHTML = `
-          <canvas width="${cardCanvas.width}" height="${cardCanvas.height}"></canvas>
-          <div class="label">
-            <div class="swatch" style="background:${c.hex};"></div>
-            ${c.name}
-          </div>
-        `;
-        const displayed = card.querySelector('canvas');
-        displayed.getContext('2d').drawImage(cardCanvas, 0, 0);
-
-        card.onclick = () => {
-          if (selectedCard) selectedCard.classList.remove('selected');
-          card.classList.add('selected');
-          selectedCard = card;
-          mixBtn.style.display = 'block';
-          log.innerHTML = `Selected: <b>${c.name}</b> (${c.hex})<br>Tap "Mix Now" to prepare 50ml!`;
-        };
-
-        grid.appendChild(card);
-      }
-    }
-
-    startBtn.onclick = startCamera;
-    retryBtn.onclick = startCamera;
-
-    mixBtn.onclick = () => {
-      if (!selectedCard) return;
-      log.innerHTML = 'Mixing your custom shade...<br>';
-      setTimeout(() => log.innerHTML += 'Dispensing base colors & developer...<br>', 1200);
-      setTimeout(() => log.innerHTML += '<span style="color:green">Done! 50ml ready for application 🎉</span>', 3000);
+      resolve(canvas);
     };
-  </script>
+  });
+}
 
+// --- step 5: display color previews ---
+async function showColorOptions(){
+  results.style.display='block';
+  grid.innerHTML='';
+  for(const color of hairColors){
+    const card=document.createElement('div');
+    card.className='card';
+    const tintCanvas=await tintHair(color.hex);
+    const displayCanvas=document.createElement('canvas');
+    displayCanvas.width=150; displayCanvas.height=150*tintCanvas.height/tintCanvas.width;
+    displayCanvas.getContext('2d').drawImage(tintCanvas,0,0,displayCanvas.width,displayCanvas.height);
+    card.appendChild(displayCanvas);
+    const label=document.createElement('div');
+    label.innerHTML=`<div style="width:15px;height:15px;border-radius:50%;display:inline-block;background:${color.hex};margin-right:6px;"></div>${color.name}`;
+    card.appendChild(label);
+    card.onclick=()=>{
+      if(selectedCard) selectedCard.classList.remove('selected');
+      card.classList.add('selected');
+      selectedCard=card;
+      log.innerHTML=`Selected color: <b>${color.name}</b> (${color.hex})`;
+      mixBtn.style.display='block';
+    };
+    grid.appendChild(card);
+  }
+}
+
+// --- step 6: button logic ---
+startBtn.onclick=startCamera;
+retryBtn.onclick=startCamera;
+
+mixBtn.onclick=()=>{
+  log.innerHTML+=' <br>🎨 Mixing 50ml color ready for application!';
+};
+</script>
 </body>
 </html>
