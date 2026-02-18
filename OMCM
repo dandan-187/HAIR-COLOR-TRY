@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Hair Color Mixer - Mobile Prototype</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 10px;
+      color: #333;
+      touch-action: manipulation;
+    }
+    h1 {
+      text-align: center;
+      color: #d81b60;
+      font-size: 1.6rem;
+      margin: 15px 0;
+    }
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+    }
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    #camera-view {
+      width: 100%;
+      height: 280px;
+      background: #000;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    #preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    #status {
+      text-align: center;
+      font-weight: bold;
+      margin: 12px 0;
+      font-size: 1.1rem;
+      color: #444;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin: 15px 0;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      text-align: center;
+      padding-bottom: 8px;
+    }
+    .card:hover, .card.selected {
+      transform: scale(1.05);
+      box-shadow: 0 4px 14px rgba(216,27,96,0.4);
+      border: 3px solid #d81b60;
+    }
+    .card img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+    }
+    .card p {
+      margin: 6px 0 0;
+      font-size: 0.95rem;
+      font-weight: bold;
+    }
+    #mix-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.2rem;
+      background: #ff5252;
+      color: white;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      margin: 20px 0 10px;
+      display: none;
+    }
+    #mix-btn:hover {
+      background: #ff1744;
+    }
+    #log {
+      padding: 12px;
+      background: #e3f2fd;
+      border-radius: 10px;
+      font-size: 1rem;
+      min-height: 60px;
+      line-height: 1.4;
+    }
+    @media (min-width: 600px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Hair Color Mixer</h1>
+
+  <div class="container">
+    <div class="section">
+      <div id="camera-view">Camera active...<br>Auto-capturing in 3s</div>
+      <img id="preview" src="https://thumbs.dreamstime.com/b/portrait-woman-long-curly-hair-neutral-expression-grey-background-emotions-series-portrait-woman-long-179897771.jpg" alt="Captured face">
+      <div id="status">Looking for your face...</div>
+    </div>
+
+    <div class="section" id="results" style="display:none;">
+      <h3 style="text-align:center; margin:0 0 12px;">10 Hair Color Options for You</h3>
+      <div class="grid" id="color-grid"></div>
+      <button id="mix-btn">Mix Selected Color Now</button>
+      <div id="log">Tap a color preview to select it.</div>
+    </div>
+  </div>
+
+  <script>
+    const colors = [
+      { name: "Golden Blonde", hex: "#f5e050", img: "https://media.allure.com/photos/66319932a37cc324dce03bf8/16:9/w_1280,c_limit/blonde-hair-colors.jpg" },
+      { name: "Ash Blonde", hex: "#e0d8c3", img: "https://cdn.mos.cms.futurecdn.net/9SzPsXkCD6XSThmw6zH9fJ.jpg" },
+      { name: "Light Brown", hex: "#c68642", img: "https://thumbs.dreamstime.com/b/natural-portrait-young-attractive-teenager-woman-looking-posing-neutral-face-expression-close-up-headshot-young-146997146.jpg" },
+      { name: "Chocolate Brown", hex: "#5d4037", img: "https://img.freepik.com/premium-photo/beautiful-woman-healthy-skin-beauty-face-cosmetic-concept-color-background-pink_431835-8013.jpg" },
+      { name: "Jet Black", hex: "#1c1c1c", img: "https://thumbs.dreamstime.com/b/female-model-long-brown-hair-illuminated-soft-light-against-neutral-backdrop-exuding-calmness-confidence-418041266.jpg" },
+      { name: "Auburn Red", hex: "#a52a2a", img: "https://cdn.piktid.com/wp-content/uploads/2025/09/virtual-hair-color-try-on-multiple-portraits-of-girl-1024x576.webp" },
+      { name: "Rose Pink", hex: "#f48fb1", img: "https://images.insmind.com/market-operations/market/side/da8df940734344cf9ce5ae762ae0fb47/1744100598810.jpg" },
+      { name: "Pastel Blue", hex: "#81d4fa", img: "https://cdn.piktid.com/wp-content/uploads/2025/09/virtual-hair-color-try-on-5-images-of-man-in-long-hair-1024x576.webp" },
+      { name: "Platinum Silver", hex: "#d0d0d0", img: "https://thumbs.dreamstime.com/z/portrait-woman-long-curly-hair-neutral-expression-grey-background-emotions-series-portrait-woman-long-179897771.jpg" },
+      { name: "Violet Purple", hex: "#9c27b0", img: "https://media.allure.com/photos/66319932a37cc324dce03bf8/16:9/w_1280,c_limit/blonde-hair-colors.jpg" }
+    ];
+
+    // Simulate auto-capture after 3 seconds
+    setTimeout(() => {
+      document.getElementById("camera-view").style.display = "none";
+      document.getElementById("preview").style.display = "block";
+      document.getElementById("status").innerText = "Skin tone: Medium Warm | Captured!";
+      document.getElementById("results").style.display = "block";
+
+      const grid = document.getElementById("color-grid");
+      colors.forEach((c, i) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <img src="${c.img || 'https://via.placeholder.com/300x300?text='+c.name}" alt="${c.name}">
+          <p>${c.name}</p>
+        `;
+        card.onclick = () => selectColor(c, card);
+        grid.appendChild(card);
+      });
+    }, 3000);
+
+    let selected = null;
+
+    function selectColor(colorObj, elem) {
+      if (selected) selected.classList.remove("selected");
+      elem.classList.add("selected");
+      selected = elem;
+
+      document.getElementById("mix-btn").style.display = "block";
+      document.getElementById("log").innerHTML = 
+        `Selected: <b>${colorObj.name}</b><br>Tap "Mix Now" to prepare this shade.`;
+    }
+
+    document.getElementById("mix-btn").onclick = function() {
+      if (!selected) return;
+      const log = document.getElementById("log");
+      log.innerHTML = "Mixing in progress...<br>";
+
+      setTimeout(() => {
+        log.innerHTML += "Dispensing pigments... 50ml<br>";
+      }, 1000);
+
+      setTimeout(() => {
+        log.innerHTML += "<span style='color:green'>Mix complete! Ready to apply 🎨</span>";
+      }, 2500);
+    };
+  </script>
+
+</body>
+</html>
